@@ -10,12 +10,12 @@ from transformers import AutoTokenizer, BitsAndBytesConfig, CLIPImageProcessor
 
 
 from model.LISA import LISAForCausalLM
-from model.llava import conversation as conversation_lib
-from model.llava.conversation import conv_templates, SeparatorStyle
-from model.llava.model.builder import load_pretrained_model
-from model.llava.utils import disable_torch_init
-from model.llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
-from model.llava.mm_utils import process_images, tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
+from llava import conversation as conversation_lib
+from llava.conversation import conv_templates, SeparatorStyle
+from llava.model.builder import load_pretrained_model
+from llava.utils import disable_torch_init
+from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
+from llava.mm_utils import process_images, tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
 from model.segment_anything.utils.transforms import ResizeLongestSide
 from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                          DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX)
@@ -182,9 +182,9 @@ def main(args):
         conv = conversation_lib.conv_templates[args.conv_type].copy()
         conv.messages = []
 
-        prompt = input("Please input your prompt: ")
-        llava_prompt = prompt
-        prompt = "Segment " + prompt
+        question = input("Please input your prompt: ")
+        llava_prompt = question
+        prompt = "Segment " + question
         
         prompt = DEFAULT_IMAGE_TOKEN + "\n" + prompt
         if args.use_mm_start_end:
@@ -292,7 +292,9 @@ def main(args):
                 for line in res:
                     # prints each recognised text
                     print(line)
-                
+
+            torch.cuda.empty_cache()
+
             result = result[0]
             image = Image.open(img_path).convert('RGB')
             boxes = [line[0] for line in result]
@@ -306,6 +308,13 @@ def main(args):
             im_show.save(ocr_path)
             print("{} has been saved.".format(ocr_path))
             
+            prompt = "You will be provided with a user question and a list of data of the texts and their coordinates on the image, "
+            prompt += "in the format of coordinates of 4 corners follow by the word and confidence"
+            prompt += "Make use the the data if it helps providing a more accurate answer to the user's question. "
+            prompt += "The user question is: " + question
+            prompt += ". The text data is: " + repr(res)
+            prompt += "Please provide a in depth and detailed answer to the question with the image and data provided."
+            llava_prompt = prompt
             
             # feed ocr results to llava (input: user prompt, ocr output, cropped image)
             disable_torch_init()
@@ -341,6 +350,8 @@ def main(args):
                 image_tensor = [image.to(model.device, dtype=torch.float16) for image in image_tensor]
             else:
                 image_tensor = image_tensor.to(model.device, dtype=torch.float16)
+            
+
 
             while True:
                 try:
